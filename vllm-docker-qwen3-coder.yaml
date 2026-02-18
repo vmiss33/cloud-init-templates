@@ -1,26 +1,36 @@
 #cloud-config
-# Simple cloud-init to run vLLM Docker container with tool calling enabled
+# cloud-init to run vLLM Docker container with tool calling enabled
 # This will start the vLLM service automatically on first boot
 runcmd:
   - |
-    echo "Starting vLLM Docker container with tool calling support..."
+    set -euxo pipefail
+
+    echo "[cloud-init] Waiting for Docker..."
+    for i in $(seq 1 60); do
+      docker info >/dev/null 2>&1 && break
+      sleep 2
+    done
+
+    IMAGE="vllm/vllm-openai-rocm:v0.15.0-base"
+    NAME="vllm"
+    MODEL="Qwen/Qwen3-Coder-Next"
+
+    docker pull "${IMAGE}"
+    docker rm -f "${NAME}" || true
+
     docker run -d \
-      --name vllm \
+      --name "${NAME}" \
       --network=host \
-      --group-add=video \
       --ipc=host \
-      --cap-add=SYS_PTRACE \
-      --security-opt seccomp=unconfined \
-      --privileged \
       --device /dev/kfd \
       --device /dev/dri \
+      --group-add video \
       --restart=always \
-      rocm/vllm:latest \
-      vllm serve Qwen/Qwen3-Coder-Next \
+      "${IMAGE}" \
+      vllm serve "${MODEL}" \
+        --max-model-len 32768 \
+        --block-size 512 \
         --enable-auto-tool-choice \
-        --tool-call-parser hermes
-  - |
-    echo "vLLM container started with tool calling enabled."
-    echo "Check status with: docker logs vllm"
-    echo "vLLM should be available shortly on port 8000. GPU access and networking are configured for host mode."
-    echo "Tool calling (auto) is now supported for clients like OpenCode."
+        --tool-call-parser qwen3_coder
+
+    echo "[cloud-init] vLLM up.  Logs: docker logs -f ${NAME}"
