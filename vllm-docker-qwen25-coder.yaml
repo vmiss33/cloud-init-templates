@@ -31,8 +31,9 @@ runcmd:
       -e VLLM_ROCM_USE_AITER_UNIFIED_ATTENTION=1 \
       "${IMAGE}" \
       vllm serve "${MODEL}" \
-        --max-model-len 32768 \
-        --block-size 256 \
-        --attention-backend ROCM_AITER_UNIFIED_ATTN
+        --attention-backend ROCM_AITER_UNIFIED_ATTN \
+        --enable-auto-tool-choice \
+        --tool-call-parser hermes
+        
 
     echo "[cloud-init] vLLM launched. Check logs with: docker logs -f vllm"
