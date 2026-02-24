@@ -16,11 +16,11 @@ runcmd:
       --device /dev/dri \
       --restart=always \
       rocm/vllm:latest \
-      vllm serve Qwen/Qwen3-Coder-Next \
+      vllm serve Qwen/Qwen3-Coder-30B-A3B-Instruct \
         --max-model-len 32768 \
         --block-size 256 \
         --enable-auto-tool-choice \
-        --tool-call-parser hermes
+        --tool-call-parser qwen3_xml
   - |
     echo "vLLM container started. Check status with: docker logs -f vllm"
     echo "API should be available on port 8000 (host networking)."
