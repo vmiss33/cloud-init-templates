@@ -28,3 +28,6 @@ runcmd:
   - |
     echo "vLLM container started. Check status with: docker logs -f vllm"
     echo "API should be available on port 8000 (host networking)."
+
+
+    
