@@ -1,5 +1,5 @@
 #cloud-config
-# Get Qwen/Qwen3.5-35B-A3B Running
+# Get Qwen/Qwen2.5-32B-Instruct running
 runcmd:
   - |
     echo "Starting vLLM Docker container..."
@@ -18,8 +18,8 @@ runcmd:
       -v /opt/hf:/root/.cache/huggingface/transformers \
       --restart=always \
       rocm/vllm-dev:nightly \
-      vllm serve Qwen/Qwen3.5-35B-A3B \
-        --max-model-len 131272 \
+      vllm serve Qwen/Qwen2.5-32B-Instruct \
+        --max-model-len 8192 \
         --block-size 256 \
   - |
     echo "vLLM container started. Check status with: docker logs -f vllm"
