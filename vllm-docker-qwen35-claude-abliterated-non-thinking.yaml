@@ -1,0 +1,36 @@
+#cloud-config
+# Get Qwen/Qwen3.5-35B-A3B Running
+runcmd:
+  - |
+    echo "Starting vLLM Docker container..."
+    docker rm -f vllm || true
+    mkdir -p /opt/hf
+    docker run -d \
+    --name vllm-abliterated \
+    --network=host \
+    --group-add=video \
+    --ipc=host \
+    --cap-add=SYS_PTRACE \
+    --security-opt seccomp=unconfined \
+    --privileged \
+    --device /dev/kfd \
+    --device /dev/dri \
+    -v /opt/hf:/root/.cache/huggingface/transformers \
+    --restart=always \
+    rocm/vllm-dev:nightly \
+    vllm serve huihui-ai/Huihui-Qwen3.5-35B-A3B-Claude-4.6-Opus-abliterated \
+        --max-model-len 131272 \
+        --block-size 256 \
+        --reasoning-parser qwen3 \
+        --default-chat-template-kwargs '{"enable_thinking": false}' \
+        --trust-remote-code \
+        --dtype bfloat16 \
+        --gpu-memory-utilization 0.95 \
+        --enforce-eager \
+        --disable-custom-all-reduce
+  - |
+    echo "vLLM container started. Check status with: docker logs -f vllm"
+    echo "API should be available on port 8000 (host networking)."
+
+
+    
