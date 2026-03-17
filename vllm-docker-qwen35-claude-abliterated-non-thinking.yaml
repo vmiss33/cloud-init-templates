@@ -1,5 +1,5 @@
 #cloud-config
-# Get Qwen/Qwen3.5-35B-A3B Running
+# Get QHuihui-Qwen3.5-35B-A3B-Claude-4.6-Opus-abliterated
 runcmd:
   - |
     echo "Starting vLLM Docker container..."
