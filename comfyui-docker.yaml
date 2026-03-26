@@ -1,0 +1,34 @@
+#cloud-config
+# ComfyUI - AMD style on Hot Aisle!
+
+#cloud-config
+
+runcmd:
+  # Make sure Docker is enabled and running (safe/no-op if already set)
+  - [systemctl, enable, --now, docker]
+
+  # Create persistent directories for models/output/custom nodes
+  - [mkdir, -p, /opt/comfyui_models]
+  - [mkdir, -p, /opt/comfyui_output]
+  - [mkdir, -p, /opt/comfyui_custom_nodes]
+
+  # Start ComfyUI container (as clean YAML list - no \ needed)
+  - [
+      docker, run, -d,
+      --name, comfyui-custom,
+      --network, host,
+      --group-add, video,
+      --ipc, host,
+      --privileged,
+      --device, /dev/kfd,
+      --device, /dev/dri,
+      -v, /opt/comfyui_models:/comfyui/models,
+      -v, /opt/comfyui_output:/comfyui/output,
+      -v, /opt/comfyui_custom_nodes:/comfyui/custom_nodes,
+      --restart, always,
+      my-comfyui-rocm:latest
+    ]
+
+  # Quick post-start checks (logs to file for debugging)
+  - [sh, -c, "sleep 10 && docker ps | grep comfyui-custom >> /var/log/comfyui-status.log || echo 'Container not running' >> /var/log/comfyui-status.log"]
+  - [sh, -c, "docker logs comfyui-custom | tail -n 30 >> /var/log/comfyui-start.log"]

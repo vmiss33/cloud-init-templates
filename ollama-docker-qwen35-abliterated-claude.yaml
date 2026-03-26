@@ -1,0 +1,84 @@
+#cloud-config
+# Ollama with ROCm for AMD MI300X + Huihui-Qwen3.5-35B-A3B-Claude model
+# This assumes your base image already has Docker and ROCm drivers installed (like your vLLM templates)
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - curl
+  - docker.io   # or whatever docker package your distro uses
+
+runcmd:
+  - |
+    echo "=== Pulling latest Ollama ROCm Docker image ==="
+    docker pull ollama/ollama:rocm
+
+  - |
+    echo "=== Starting Ollama container with MI300X ROCm support ==="
+    docker rm -f ollama || true
+
+    docker run -d \
+      --name ollama \
+      --network=host \
+      --ipc=host \
+      --group-add=video \
+      --group-add=render \
+      --privileged \
+      --cap-add=SYS_PTRACE \
+      --security-opt seccomp=unconfined \
+      --device /dev/kfd \
+      --device /dev/dri \
+      -e HSA_OVERRIDE_GFX_VERSION=9.4.2 \
+      -e PYTORCH_ROCM_ARCH=gfx942 \
+      -e OLLAMA_NUM_PARALLEL=4 \
+      -v /opt/ollama:/root/.ollama \
+      --restart=always \
+      ollama/ollama:rocm
+
+  - |
+    echo "=== Waiting for Ollama to start ==="
+    sleep 15
+
+  - |
+    echo "=== Pulling the model: huihui_ai/qwen3.5-abliterated:35b-Claude ==="
+    docker exec ollama ollama pull huihui_ai/qwen3.5-abliterated:35b-Claude
+
+  - |
+    echo "=== Setup complete! ==="
+    echo "Ollama is running with ROCm on MI300X."
+    echo "Model: huihui_ai/qwen3.5-abliterated:35b-Claude"
+    echo ""
+    echo "Test it with:"
+    echo "  curl http://localhost:11434/api/generate -d '{\"model\": \"huihui_ai/qwen3.5-abliterated:35b-Claude\", \"prompt\": \"Hello\"}'"
+    echo ""
+    echo "Or use OpenAI-compatible API at http://localhost:11434/v1"
+    echo "Check logs: docker logs -f ollama"
+
+write_files:
+  - path: /etc/docker/daemon.json
+    content: |
+      {
+        "log-opts": {
+          "max-size": "50m",
+          "max-file": "3"
+        }
+      }
+    permissions: '0644'
+
+  - path: /root/post-install-notes.txt
+    content: |
+      Ollama MI300X Setup Complete
+      
+      Useful commands:
+      - docker logs -f ollama
+      - docker exec ollama ollama list
+      - docker exec ollama ollama ps
+      - curl http://localhost:11434/api/tags
+      
+      Environment variables passed:
+      - HSA_OVERRIDE_GFX_VERSION=9.4.2 (critical for MI300X)
+      - PYTORCH_ROCM_ARCH=gfx942
+      
+      Model location: /opt/ollama (persisted on host)
+    permissions: '0644'
