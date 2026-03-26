@@ -1,5 +1,6 @@
 #cloud-config
-#ollama rocm qwen 3.5 ablitated claude 35b
+# ollama rocm qwen 3.5 abliterated claude 35b
+
 write_files:
   - path: /etc/docker/daemon.json
     permissions: '0644'
@@ -30,11 +31,11 @@ write_files:
 
 runcmd:
   - |
-    set -euxo pipefail
+    set -ex
 
     echo "=== Checking Docker ==="
     command -v docker
-    systemctl is-active docker || systemctl start docker
+    systemctl start docker || true
     systemctl restart docker || true
 
     echo "=== Pulling latest Ollama ROCm Docker image ==="
@@ -64,6 +65,9 @@ runcmd:
 
     echo "=== Waiting for Ollama to start ==="
     sleep 15
+
+    echo "=== Container logs ==="
+    docker logs ollama || true
 
     echo "=== Pulling model ==="
     docker exec ollama ollama pull huihui_ai/qwen3.5-abliterated:35b-Claude
