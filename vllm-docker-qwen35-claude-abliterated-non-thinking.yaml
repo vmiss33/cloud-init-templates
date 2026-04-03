@@ -1,24 +1,58 @@
 #cloud-config
 # Get QHuihui-Qwen3.5-35B-A3B-Claude-4.6-Opus-abliterated
+
 runcmd:
   - |
-    echo "Starting vLLM Docker container..."
-    docker rm -f vllm || true
+    echo "=== Setting up vLLM with Huihui-Qwen3.5-35B-A3B-Claude-4.6-Opus-abliterated ==="
+
+    # Clean up any old container
+    docker rm -f vllm-abliterated || true
+
     mkdir -p /opt/hf
+
+    echo "Pre-downloading the model (this may take a long time)..."
+    docker run --rm \
+      -v /opt/hf:/root/.cache/huggingface \
+      rocm/vllm-dev:nightly \
+      huggingface-cli download \
+        huihui-ai/Huihui-Qwen3.5-35B-A3B-Claude-4.6-Opus-abliterated \
+        --local-dir /root/.cache/huggingface/hub/models--huihui-ai--Huihui-Qwen3.5-35B-A3B-Claude-4.6-Opus-abliterated
+
+    echo "Model download completed. Patching tokenizer_config.json..."
+
+    # Find the snapshot directory (there should be only one)
+    SNAPSHOT_DIR=$(find /opt/hf/hub/models--huihui-ai--Huihui-Qwen3.5-35B-A3B-Claude-4.6-Opus-abliterated/snapshots -mindepth 1 -maxdepth 1 -type d | head -n 1)
+
+    if [ -n "$SNAPSHOT_DIR" ] && [ -f "$SNAPSHOT_DIR/tokenizer_config.json" ]; then
+      echo "Found snapshot: $SNAPSHOT_DIR"
+      cp "$SNAPSHOT_DIR/tokenizer_config.json" "$SNAPSHOT_DIR/tokenizer_config.json.bak"
+      
+      # Replace the problematic tokenizer class
+      sed -i 's/"tokenizer_class": "TokenizersBackend"/"tokenizer_class": "Qwen2TokenizerFast"/g' "$SNAPSHOT_DIR/tokenizer_config.json"
+      sed -i 's/"tokenizer_class": "TokenizersBackendFast"/"tokenizer_class": "Qwen2TokenizerFast"/g' "$SNAPSHOT_DIR/tokenizer_config.json"
+      
+      echo "Tokenizer successfully patched (backup saved as tokenizer_config.json.bak)"
+    else
+      echo "ERROR: Could not find tokenizer_config.json after download. Setup failed."
+      exit 1
+    fi
+
+    echo "Starting vLLM container..."
+
     docker run -d \
-    --name vllm-abliterated \
-    --network=host \
-    --group-add=video \
-    --ipc=host \
-    --cap-add=SYS_PTRACE \
-    --security-opt seccomp=unconfined \
-    --privileged \
-    --device /dev/kfd \
-    --device /dev/dri \
-    -v /opt/hf:/root/.cache/huggingface/transformers \
-    --restart=always \
-    rocm/vllm-dev:nightly \
-    vllm serve huihui-ai/Huihui-Qwen3.5-35B-A3B-Claude-4.6-Opus-abliterated \
+      --name vllm-abliterated \
+      --network=host \
+      --group-add=video \
+      --ipc=host \
+      --cap-add=SYS_PTRACE \
+      --security-opt seccomp=unconfined \
+      --privileged \
+      --device /dev/kfd \
+      --device /dev/dri \
+      -v /opt/hf:/root/.cache/huggingface \
+      --restart=always \
+      rocm/vllm-dev:nightly \
+      vllm serve huihui-ai/Huihui-Qwen3.5-35B-A3B-Claude-4.6-Opus-abliterated \
         --max-model-len 131272 \
         --block-size 256 \
         --reasoning-parser qwen3 \
@@ -28,9 +62,7 @@ runcmd:
         --gpu-memory-utilization 0.95 \
         --enforce-eager \
         --disable-custom-all-reduce
-  - |
-    echo "vLLM container started. Check status with: docker logs -f vllm"
-    echo "API should be available on port 8000 (host networking)."
 
-
-    
+    echo "vLLM container started successfully!"
+    echo "Monitor with: docker logs -f vllm-abliterated"
+    echo "API should be available on http://your-server-ip:8000"
