@@ -10,30 +10,38 @@ runcmd:
 
     mkdir -p /opt/hf
 
-    echo "Pre-downloading the model (this may take a long time)..."
+    echo "Pre-downloading the model using standard HF cache (this will take a long time on first run)..."
+
+    # Pre-download using standard cache (creates proper snapshots/ structure)
     docker run --rm \
       -v /opt/hf:/root/.cache/huggingface \
       rocm/vllm-dev:nightly \
-      huggingface-cli download \
+      hf download \
         huihui-ai/Huihui-Qwen3.5-35B-A3B-Claude-4.6-Opus-abliterated \
-        --local-dir /root/.cache/huggingface/hub/models--huihui-ai--Huihui-Qwen3.5-35B-A3B-Claude-4.6-Opus-abliterated
+        --cache-dir /root/.cache/huggingface/hub
 
-    echo "Model download completed. Patching tokenizer_config.json..."
+    echo "Model download completed. Locating and patching tokenizer_config.json..."
 
-    # Find the snapshot directory (there should be only one)
-    SNAPSHOT_DIR=$(find /opt/hf/hub/models--huihui-ai--Huihui-Qwen3.5-35B-A3B-Claude-4.6-Opus-abliterated/snapshots -mindepth 1 -maxdepth 1 -type d | head -n 1)
+    # Find tokenizer_config.json flexibly (normal snapshots layout or fallback)
+    TOKENIZER_CONFIG=$(find /opt/hf/hub/models--huihui-ai--Huihui-Qwen3.5-35B-A3B-Claude-4.6-Opus-abliterated -name tokenizer_config.json -type f | head -n 1)
 
-    if [ -n "$SNAPSHOT_DIR" ] && [ -f "$SNAPSHOT_DIR/tokenizer_config.json" ]; then
-      echo "Found snapshot: $SNAPSHOT_DIR"
-      cp "$SNAPSHOT_DIR/tokenizer_config.json" "$SNAPSHOT_DIR/tokenizer_config.json.bak"
+    if [ -n "$TOKENIZER_CONFIG" ]; then
+      echo "Found tokenizer_config.json at: $TOKENIZER_CONFIG"
       
-      # Replace the problematic tokenizer class
-      sed -i 's/"tokenizer_class": "TokenizersBackend"/"tokenizer_class": "Qwen2TokenizerFast"/g' "$SNAPSHOT_DIR/tokenizer_config.json"
-      sed -i 's/"tokenizer_class": "TokenizersBackendFast"/"tokenizer_class": "Qwen2TokenizerFast"/g' "$SNAPSHOT_DIR/tokenizer_config.json"
+      # Backup original
+      cp "$TOKENIZER_CONFIG" "${TOKENIZER_CONFIG}.bak"
       
-      echo "Tokenizer successfully patched (backup saved as tokenizer_config.json.bak)"
+      # Patch the problematic tokenizer class
+      sed -i 's/"tokenizer_class": "TokenizersBackend"/"tokenizer_class": "Qwen2TokenizerFast"/g' "$TOKENIZER_CONFIG"
+      sed -i 's/"tokenizer_class": "TokenizersBackendFast"/"tokenizer_class": "Qwen2TokenizerFast"/g' "$TOKENIZER_CONFIG"
+      
+      echo "Tokenizer patch applied successfully."
+      echo "Patched content:"
+      grep -E "tokenizer_class" "$TOKENIZER_CONFIG"
     else
-      echo "ERROR: Could not find tokenizer_config.json after download. Setup failed."
+      echo "ERROR: Could not find tokenizer_config.json after download."
+      echo "Contents of model directory:"
+      ls -la /opt/hf/hub/models--huihui-ai--Huihui-Qwen3.5-35B-A3B-Claude-4.6-Opus-abliterated/
       exit 1
     fi
 
@@ -64,5 +72,5 @@ runcmd:
         --disable-custom-all-reduce
 
     echo "vLLM container started successfully!"
-    echo "Monitor with: docker logs -f vllm-abliterated"
-    echo "API should be available on http://your-server-ip:8000"
+    echo "Monitor logs with: docker logs -f vllm-abliterated"
+    echo "API should be available on port 8000."
