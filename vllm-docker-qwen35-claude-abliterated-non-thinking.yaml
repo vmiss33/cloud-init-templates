@@ -3,16 +3,16 @@
 
 runcmd:
   - |
+    bash -lc '
+    set -euo pipefail
+
     echo "=== Setting up vLLM with Huihui-Qwen3.5-35B-A3B-Claude-4.6-Opus-abliterated ==="
 
-    # Clean up any old container
     docker rm -f vllm-abliterated || true
-
     mkdir -p /opt/hf
 
     echo "Pre-downloading the model using standard HF cache (this will take a long time on first run)..."
 
-    # Pre-download using standard cache (creates proper snapshots/ structure)
     docker run --rm \
       -v /opt/hf:/root/.cache/huggingface \
       rocm/vllm-dev:nightly \
@@ -22,26 +22,23 @@ runcmd:
 
     echo "Model download completed. Locating and patching tokenizer_config.json..."
 
-    # Find tokenizer_config.json flexibly (normal snapshots layout or fallback)
-    TOKENIZER_CONFIG=$(find /opt/hf/hub/models--huihui-ai--Huihui-Qwen3.5-35B-A3B-Claude-4.6-Opus-abliterated -name tokenizer_config.json -type f | head -n 1)
+    MODEL_DIR=/opt/hf/hub/models--huihui-ai--Huihui-Qwen3.5-35B-A3B-Claude-4.6-Opus-abliterated
+    TOKENIZER_CONFIG=$(find -L "$MODEL_DIR" -name tokenizer_config.json | head -n 1)
 
     if [ -n "$TOKENIZER_CONFIG" ]; then
       echo "Found tokenizer_config.json at: $TOKENIZER_CONFIG"
-      
-      # Backup original
+
       cp "$TOKENIZER_CONFIG" "${TOKENIZER_CONFIG}.bak"
-      
-      # Patch the problematic tokenizer class
-      sed -i 's/"tokenizer_class": "TokenizersBackend"/"tokenizer_class": "Qwen2TokenizerFast"/g' "$TOKENIZER_CONFIG"
-      sed -i 's/"tokenizer_class": "TokenizersBackendFast"/"tokenizer_class": "Qwen2TokenizerFast"/g' "$TOKENIZER_CONFIG"
-      
+
+      sed -i '\''s/"tokenizer_class": "TokenizersBackend"/"tokenizer_class": "Qwen2TokenizerFast"/g'\'' "$TOKENIZER_CONFIG"
+      sed -i '\''s/"tokenizer_class": "TokenizersBackendFast"/"tokenizer_class": "Qwen2TokenizerFast"/g'\'' "$TOKENIZER_CONFIG"
+
       echo "Tokenizer patch applied successfully."
-      echo "Patched content:"
-      grep -E "tokenizer_class" "$TOKENIZER_CONFIG"
+      grep -E "tokenizer_class" "$TOKENIZER_CONFIG" || true
     else
       echo "ERROR: Could not find tokenizer_config.json after download."
-      echo "Contents of model directory:"
-      ls -la /opt/hf/hub/models--huihui-ai--Huihui-Qwen3.5-35B-A3B-Claude-4.6-Opus-abliterated/
+      echo "Model tree:"
+      find "$MODEL_DIR" | sed -n "1,200p"
       exit 1
     fi
 
@@ -64,7 +61,7 @@ runcmd:
         --max-model-len 131272 \
         --block-size 256 \
         --reasoning-parser qwen3 \
-        --default-chat-template-kwargs '{"enable_thinking": false}' \
+        --default-chat-template-kwargs "{\"enable_thinking\": false}" \
         --trust-remote-code \
         --dtype bfloat16 \
         --gpu-memory-utilization 0.95 \
@@ -74,3 +71,4 @@ runcmd:
     echo "vLLM container started successfully!"
     echo "Monitor logs with: docker logs -f vllm-abliterated"
     echo "API should be available on port 8000."
+    '
